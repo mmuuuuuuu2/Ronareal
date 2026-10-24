@@ -1,0 +1,115 @@
+# CI RONA — berjalan di runner resmi GitHub (akses registry npm normal).
+# Satu sumber kebenaran: scripts/verify-with-npm.sh (status PASS / FAIL / SKIPPED + exit code asli per langkah).
+# Job GAGAL bila ada langkah FAIL *atau* SKIPPED (CI menyiapkan semua prasyarat sendiri, jadi SKIPPED = ada yang salah).
+# Tidak ada `continue-on-error`, tidak ada `|| true` pada langkah verifikasi. Tidak ada secret yang dipakai atau dicetak.
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    name: Verifikasi (install, secret scan, unit, lint, build, typecheck, db, browser)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Pasang Node.js 22 (skrip memeriksa minimal 22.18)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          # Tanpa cache npm: package-lock.json mungkin belum ada pada run pertama.
+
+      - name: Catat apakah package-lock.json sudah ada di repository
+        run: |
+          if [ -f package-lock.json ]; then echo "LOCK_PRESENT=1" >> "$GITHUB_ENV"; else echo "LOCK_PRESENT=0" >> "$GITHUB_ENV"; fi
+
+      - name: Pastikan PostgreSQL 16 tersedia (untuk test:db)
+        run: |
+          if [ ! -x /usr/lib/postgresql/16/bin/initdb ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-16
+          fi
+          /usr/lib/postgresql/16/bin/initdb --version
+
+      - name: Siapkan alat uji browser di folder terpisah (tidak mengubah package.json proyek)
+        run: |
+          mkdir -p "$RUNNER_TEMP/rona-tools"
+          cd "$RUNNER_TEMP/rona-tools"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund esbuild@0.28.2 tailwindcss@4.3.3 playwright@1.56.0
+          npx playwright install --with-deps chromium
+          echo "RONA_TOOLS=$RUNNER_TEMP/rona-tools" >> "$GITHUB_ENV"
+
+      - name: Verifikasi (scripts/verify-with-npm.sh)
+        run: bash scripts/verify-with-npm.sh
+
+      - name: Ringkasan hasil (tab Summary pada run ini)
+        if: always()
+        run: |
+          {
+            echo "## Hasil verifikasi RONA"
+            echo
+            echo "> Status **PASS/FAIL/SKIPPED** di bawah berasal dari exit code asli tiap langkah. CI hijau **bukan** berarti production-ready: lihat \`docs/production-readiness-report.md\` §8."
+            echo
+            if [ -f verification-output/results.tsv ]; then
+              echo "| Langkah | Status | Exit | Catatan |"
+              echo "|---|---|---|---|"
+              awk -F'\t' '{ s=$2; if (s=="PASS") s="✅ PASS"; else if (s=="FAIL") s="❌ FAIL"; else s="⏭️ SKIPPED"; gsub(/\|/,"/",$4); printf "| %s | %s | %s | %s |\n", $1, s, $3, $4 }' verification-output/results.tsv
+              echo
+              echo "<details><summary>summary.txt (versi Node/npm/paket terpasang, galat pertama)</summary>"
+              echo
+              echo '```'
+              cat verification-output/summary.txt
+              echo '```'
+              echo "</details>"
+            else
+              echo "❌ verification-output/results.tsv tidak terbentuk: skrip berhenti sebelum mencatat hasil. Lihat log langkah di atas."
+            fi
+            if [ "${LOCK_PRESENT:-1}" = "0" ] && [ -f package-lock.json ]; then
+              echo
+              echo "**Lockfile:** repository belum punya \`package-lock.json\`; npm membuatnya di run ini. Workflow *Generate lockfile* meng-commit-nya otomatis; bila tidak bisa, unduh artifact \`package-lock-generated\` dan commit manual."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Pindai log terhadap secret sebelum diunggah
+        if: always()
+        run: |
+          if [ -d verification-output ] && grep -R -n -E 'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|sb_secret_[A-Za-z0-9_-]{16,}|postgres(ql)?://[^[:space:]:@/]+:[^[:space:]@/]{3,}@' verification-output > /dev/null; then
+            echo "::error::Pola mirip secret ditemukan di log; artifact TIDAK diunggah dan log dihapus."
+            rm -rf verification-output
+            exit 1
+          fi
+
+      - name: Unggah log verifikasi
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-output
+          path: verification-output/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Unggah package-lock.json yang dihasilkan npm (hanya bila belum ada di repo)
+        if: always() && env.LOCK_PRESENT == '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock-generated
+          path: package-lock.json
+          if-no-files-found: ignore
+          retention-days: 30

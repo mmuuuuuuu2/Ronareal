@@ -1,0 +1,8 @@
+# Akhir baris LF di semua OS: skrip .sh/.mjs dan berkas SQL tidak boleh berubah jadi CRLF saat di-clone di Windows
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.sha256 text eol=lf

@@ -1,0 +1,106 @@
+/* RONA design tokens — sumber tunggal nilai visual. Tema baru = override variabel, bukan salin komponen.
+   Palet awal dari spesifikasi produk. Efek glass dipakai hemat (hanya permukaan melayang: navbar, sheet, kartu CTA). */
+:root {
+  /* palet */
+  --rona-porcelain: #f7f6f2;
+  --rona-ink: #222222;
+  --rona-mist: #dce6e8;
+  --rona-sand: #e7dfd3;
+  --rona-champagne: #b5a58d;
+
+  /* peran semantik */
+  --rona-bg: var(--rona-porcelain);
+  --rona-fg: var(--rona-ink);
+  --rona-surface: var(--rona-mist);
+  --rona-surface-warm: var(--rona-sand);
+  --rona-accent: var(--rona-champagne);
+  --rona-fg-muted: color-mix(in srgb, var(--rona-ink) 72%, transparent); /* >= 4.5:1 di atas porcelain */
+  --rona-border: color-mix(in srgb, var(--rona-ink) 10%, transparent);
+
+  /* glass (blur kecil agar ringan di GPU mobile) */
+  --rona-glass-bg: color-mix(in srgb, #ffffff 58%, transparent);
+  --rona-glass-border: color-mix(in srgb, #ffffff 70%, transparent);
+  --rona-glass-blur: 14px;
+  --rona-glass-shadow: 0 8px 32px color-mix(in srgb, var(--rona-ink) 8%, transparent);
+
+  /* bentuk & ritme */
+  --rona-radius-sm: 10px;
+  --rona-radius-md: 16px;
+  --rona-radius-lg: 24px;
+  --rona-radius-pill: 999px;
+  --rona-space-unit: 4px;
+
+  /* motion */
+  --rona-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --rona-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --rona-dur-fast: 140ms;
+  --rona-dur-base: 260ms;
+  --rona-dur-slow: 480ms;
+
+  /* ---- Phase 6 ---- */
+  /* status (kontras >= 4.5:1 di atas porcelain/putih; makna tidak hanya lewat warna: selalu ada teks/ikon) */
+  --rona-danger: #a4262c;
+  --rona-danger-fg: #7a1c21;
+  --rona-success: #1e6b45;
+  --rona-success-fg: #174f34;
+
+  /* skala tipografi (rem; badan teks minimal 1rem untuk input agar iOS tidak zoom) */
+  --rona-text-xs: 0.75rem;
+  --rona-text-sm: 0.875rem;
+  --rona-text-base: 1rem;
+  --rona-text-lg: 1.125rem;
+  --rona-text-xl: 1.375rem;
+  --rona-text-2xl: 1.75rem;
+
+  /* skala jarak */
+  --rona-space-1: 0.25rem;
+  --rona-space-2: 0.5rem;
+  --rona-space-3: 0.75rem;
+  --rona-space-4: 1rem;
+  --rona-space-5: 1.5rem;
+  --rona-space-6: 2rem;
+
+  /* elevasi: tipis dan lembut, bukan bayangan tebal */
+  --rona-elev-1: 0 1px 2px color-mix(in srgb, var(--rona-ink) 6%, transparent);
+  --rona-elev-2: 0 6px 20px color-mix(in srgb, var(--rona-ink) 8%, transparent);
+  --rona-elev-3: 0 24px 64px color-mix(in srgb, var(--rona-ink) 22%, transparent);
+
+  /* permukaan: solid (konten padat), glass tipis (melayang), glass tebal (sheet) */
+  --rona-surface-solid: color-mix(in srgb, #ffffff 62%, transparent);
+  --rona-field-bg: color-mix(in srgb, #ffffff 82%, transparent);
+  --rona-scrim: color-mix(in srgb, #141414 50%, transparent);
+
+  /* fokus: dua lapis agar terlihat di latar terang maupun gelap */
+  --rona-focus: var(--rona-ink);
+  --rona-focus-halo: color-mix(in srgb, #ffffff 90%, transparent);
+
+  /* target sentuh minimum */
+  --rona-tap: 2.75rem;
+
+  /* safe area perangkat (notch/home indicator); 0 bila tidak ada */
+  --rona-safe-top: env(safe-area-inset-top, 0px);
+  --rona-safe-right: env(safe-area-inset-right, 0px);
+  --rona-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --rona-safe-left: env(safe-area-inset-left, 0px);
+
+  /* lapisan */
+  --rona-z-sticky: 20;
+  --rona-z-toast: 60;
+}
+
+/* Fallback tanpa dukungan backdrop-filter: permukaan solid, tetap terbaca. */
+@supports not (backdrop-filter: blur(1px)) {
+  :root { --rona-glass-bg: color-mix(in srgb, #ffffff 92%, transparent); }
+}
+
+/* Hormati preferensi gerak: matikan transisi/animasi CSS. Komponen Motion wajib memakai
+   useReducedMotion() / <MotionConfig reducedMotion="user"> (lihat docs/phase-0-report.md). */
+@media (prefers-reduced-motion: reduce) {
+  :root { --rona-dur-fast: 0ms; --rona-dur-base: 0ms; --rona-dur-slow: 0ms; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

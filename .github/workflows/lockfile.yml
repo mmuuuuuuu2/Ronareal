@@ -1,0 +1,76 @@
+# Menghasilkan package-lock.json ASLI lewat npm di runner GitHub dan meng-commit-nya ke branch bila lockfile belum ada.
+# Tidak ada lockfile buatan tangan. Bila lockfile sudah ada, workflow ini tidak melakukan apa pun.
+# Catatan: commit oleh GITHUB_TOKEN tidak memicu workflow lain, jadi setelah commit workflow ini menjalankan CI lewat workflow_dispatch.
+# Bila branch dilindungi (push langsung ditolak), langkah push GAGAL dengan pesan jelas; unduh artifact lalu commit manual.
+name: Generate lockfile
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # meng-commit package-lock.json
+  actions: write    # memicu CI setelah commit
+
+concurrency:
+  group: lockfile-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  lockfile:
+    name: Buat package-lock.json bila belum ada
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Periksa kebutuhan
+        id: need
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "need=false" >> "$GITHUB_OUTPUT"
+            echo "package-lock.json sudah ada: tidak ada yang dilakukan."
+          else
+            echo "need=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.need.outputs.need == 'true'
+        with:
+          node-version: "22"
+
+      - name: Hasilkan lockfile dengan npm (tanpa menjalankan skrip paket)
+        if: steps.need.outputs.need == 'true'
+        run: |
+          node -v && npm -v
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          test -s package-lock.json
+          # Bukti sinkron: npm ci dry-run harus berhasil terhadap lockfile yang baru dibuat.
+          npm ci --dry-run --ignore-scripts --no-audit --no-fund
+
+      - name: Simpan juga sebagai artifact (cadangan bila push ditolak)
+        if: steps.need.outputs.need == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock-generated
+          path: package-lock.json
+          retention-days: 30
+
+      - name: Commit dan push package-lock.json
+        if: steps.need.outputs.need == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "chore: tambahkan package-lock.json (dihasilkan npm di GitHub Actions)"
+          if ! git push origin HEAD; then
+            echo "::error::Push ditolak (mungkin branch dilindungi). Unduh artifact 'package-lock-generated' dari run ini, letakkan di root repository, lalu commit manual."
+            exit 1
+          fi
+
+      - name: Jalankan CI pada commit lockfile (npm ci)
+        if: steps.need.outputs.need == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yml --ref "${{ github.ref_name }}"
