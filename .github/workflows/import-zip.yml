@@ -12,22 +12,27 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Extract RONA source
         run: |
-          test -f RONA_Final_Candidate_PARTIAL.zip
-          unzip -q RONA_Final_Candidate_PARTIAL.zip
-          test -d rona
-          cp -a rona/. .
-          rm -rf rona
-          rm -f RONA_Final_Candidate_PARTIAL.zip
+          set -eu
+          ZIP="$(find . -maxdepth 1 -type f -iname 'RONA_Final_Candidate_PARTIAL.zip' -print -quit)"
+          test -n "$ZIP"
+          mkdir -p /tmp/rona-source
+          unzip -q "$ZIP" -d /tmp/rona-source
+          ROOT="$(find /tmp/rona-source -name package.json -type f -print -quit)"
+          test -n "$ROOT"
+          ROOT="$(dirname "$ROOT")"
+          cp -a "$ROOT"/. .
+          rm -f "$ZIP"
+          rm -rf /tmp/rona-source
 
-      - name: Commit source code
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if ! git diff --cached --quiet; then
-            git commit -m "Import RONA source code"
-            git push
-          fi
+      - name: Upload extracted source as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RONA-extracted-source
+          path: .
+          if-no-files-found: error
+          retention-days: 3
