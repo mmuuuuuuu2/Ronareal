@@ -1,0 +1,33 @@
+name: Import RONA ZIP
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract RONA source
+        run: |
+          test -f RONA_Final_Candidate_PARTIAL.zip
+          unzip -q RONA_Final_Candidate_PARTIAL.zip
+          test -d rona
+          cp -a rona/. .
+          rm -rf rona
+          rm -f RONA_Final_Candidate_PARTIAL.zip
+
+      - name: Commit source code
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Import RONA source code"
+            git push
+          fi
